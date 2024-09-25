@@ -2,49 +2,44 @@ public class DiningPhilosophers {
 
     public static void main(String[] args) {
         int numPhilosophers = 5;
-        Phil[] philosophers = new Phil[numPhilosophers];
-        Fork[] forks = new Fork[numPhilosophers];
-
-        for (int i = 0; i < numPhilosophers; i++) {
-            forks[i] = new Fork(i);
-            philosophers[i] = new Phil(i, forks[i], forks[(i + 1) % numPhilosophers]); //philosopher and fgorks
-        }
 
         
         for (int i = 0; i < numPhilosophers; i++) {
-            philosophers[i].eat(); //in each iteration the will try to eat
+            new Thread(new Philosopher(i)).start(); //implemented theads for philosophers
         }
     }
-}
 
-class Phil {
-    private int id;
-    private Fork lFork;
-    private Fork rFork;
+    static class Philosopher implements Runnable {
+        private int id;
 
-    public Phil(int id, Fork lFork, Fork rFork) {
-        this.id = id;
-        this.lFork = lFork;
-        this.rFork = rFork;
-    }
+        public Philosopher(int id) {
+            this.id = id;
+        }
 
-    public void eat() {
-        System.out.println("Philosopher " + id + " is trying to pick up forks.");
-        System.out.println("Philosopher " + id + " picked up left fork " + lFork.getId());
-        System.out.println("Philosopher " + id + " picked up right fork " + rFork.getId());
-        System.out.println("Philosopher " + id + " is eating.");
-        System.out.println("Philosopher " + id + " finished eating and put down the forks.");
-    }
-}
+        @Override
+        public void run() {
+            try {
+                while (true) {
+                    think();
+                    eat();
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
 
-class Fork {
-    private int id;
+        private void think() throws InterruptedException {
+            System.out.println("Philosopher " + id + " is thinking...");
+            Thread.sleep(1000); //thinks
+        }
 
-    public Fork(int id) {
-        this.id = id;
-    }
-
-    public int getId() {
-        return id;
+        private void eat() throws InterruptedException {
+            System.out.println("Philosopher " + id + " picks up left fork.");
+            Thread.sleep(1000);  //eat
+            System.out.println("Philosopher " + id + " picks up right fork.");
+            System.out.println("Philosopher " + id + " is eating...");
+            Thread.sleep(1000);  //Eat
+            System.out.println("Philosopher " + id + " puts down forks.");
+        }
     }
 }
