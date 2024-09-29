@@ -4,14 +4,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public class DiningPhilosophers {
-    private static final int NUM_PHILOSOPHERS = 25;  // Number of philosophers
-    private static final int NUM_FORKS = 5;  // Only 5 forks per table
+    private static final int NUM_PHILOSOPHERS = 25;  // Number of philosophers and forks
     private static final Random random = new Random();
 
-    // Forks (5 forks shared by 5 philosophers at each table)
-    private static final Object[] forks = new Object[NUM_FORKS];
+    // Forks (25 forks shared by 25 philosophers)
+    private static final Object[] forks = new Object[NUM_PHILOSOPHERS];
 
-    // Philosopher names (A to Y for 25 philosophers)
+    // Philosopher names (A, B, C, ..., Y)
     private static final char[] philosopherNames = new char[NUM_PHILOSOPHERS];
 
     // Philosopher states to track thinking, eating, and waiting
@@ -20,19 +19,14 @@ public class DiningPhilosophers {
 
     // Deadlock detection flag
     private static volatile boolean deadlockDetected = false;
-
-    // Last philosopher moved to the sixth table
-    private static volatile char sixthTablePhilosopher = '\0';
+    private static volatile char lastPhilosopherMoved = ' ';
 
     public static void main(String[] args) throws InterruptedException {
-        // Initialize forks and philosopher states
-        for (int i = 0; i < NUM_FORKS; i++) {
-            forks[i] = new Object();  // Use the object as a lock (fork)
-        }
-
+        // Initialize philosopher names and forks
         for (int i = 0; i < NUM_PHILOSOPHERS; i++) {
-            philosopherNames[i] = (char) ('A' + i);  // Names A to Y
+            forks[i] = new Object();  // Use the object as a lock (fork)
             philosopherStates[i] = State.THINKING;  // Initial state is THINKING
+            philosopherNames[i] = (char) ('A' + i);  // Assign names A, B, C, ..., Y
         }
 
         // Thread pool for philosophers
@@ -48,13 +42,13 @@ public class DiningPhilosophers {
 
         // Wait for the simulation to finish
         executorService.shutdown();
-        executorService.awaitTermination(1, TimeUnit.HOURS);
+        executorService.awaitTermination(2, TimeUnit.MINUTES);  // Adjusted to 2 minutes
     }
 
     // Philosopher class implementing Runnable
     static class Philosopher implements Runnable {
-        private final char name;  // Philosopher name (A to Y)
-        private final int id;     // Philosopher ID (0 to 24)
+        private final char name;  // Philosopher name (A, B, C, ..., Y)
+        private final int id;     // Philosopher ID (0 to 24 for accessing forks and states)
 
         public Philosopher(char name, int id) {
             this.name = name;
@@ -75,18 +69,19 @@ public class DiningPhilosophers {
             }
         }
 
-        // Philosopher thinks for a random time (0-10 seconds)
+        // Philosopher thinks for a random time (0-2 seconds)
         private void think() throws InterruptedException {
             synchronized (philosopherStates) {
                 philosopherStates[id] = State.THINKING;
             }
             System.out.println("Philosopher " + name + " is thinking...");
-            Thread.sleep(random.nextInt(10000));
+            Thread.sleep(random.nextInt(2000));  // Reduced from 10000 to 2000 ms
         }
 
-        // Philosopher tries to pick up both forks (left and right) at their respective table
+        // Philosopher tries to pick up both forks (left and right)
         private void pickUpForks() throws InterruptedException {
-            int tableId = id % NUM_FORKS;  // Each philosopher tries to access one of the 5 forks at the table
+            int leftFork = id;
+            int rightFork = (id + 1) % NUM_PHILOSOPHERS;
 
             // Set the state to HUNGRY (waiting for forks)
             synchronized (philosopherStates) {
@@ -94,8 +89,8 @@ public class DiningPhilosophers {
             }
 
             // Try to pick up left and right forks in the right order
-            synchronized (forks[tableId]) {
-                synchronized (forks[(tableId + 1) % NUM_FORKS]) {
+            synchronized (forks[leftFork]) {
+                synchronized (forks[rightFork]) {
                     // Successfully acquired both forks, update state to EATING
                     synchronized (philosopherStates) {
                         philosopherStates[id] = State.EATING;
@@ -104,24 +99,25 @@ public class DiningPhilosophers {
             }
         }
 
-        // Philosopher eats for a random time (0-5 seconds)
+        // Philosopher eats for a random time (0-1 second)
         private void eat() throws InterruptedException {
             System.out.println("Philosopher " + name + " is eating...");
-            Thread.sleep(random.nextInt(5000));
+            Thread.sleep(random.nextInt(1000));  // Reduced from 5000 to 1000 ms
         }
 
         // Philosopher puts down both forks
         private void putDownForks() {
-            int tableId = id % NUM_FORKS;  // Each philosopher puts down forks on their assigned table
+            int leftFork = id;
+            int rightFork = (id + 1) % NUM_PHILOSOPHERS;
 
             // Release both forks
-            synchronized (forks[tableId]) {
-                synchronized (forks[(tableId + 1) % NUM_FORKS]) {
+            synchronized (forks[leftFork]) {
+                synchronized (forks[rightFork]) {
                     // After putting down forks, return to THINKING state
                     synchronized (philosopherStates) {
                         philosopherStates[id] = State.THINKING;
                     }
-                    System.out.println("Philosopher " + name + " put down forks.");
+                    System.out.println("Philosopher " + name + " put down forks " + leftFork + " and " + rightFork + ".");
                 }
             }
         }
@@ -129,7 +125,7 @@ public class DiningPhilosophers {
 
     // DeadlockDetector class to periodically check for deadlock
     static class DeadlockDetector implements Runnable {
-        private static final int CHECK_INTERVAL = 5000;  // Check every 5 seconds
+        private static final int CHECK_INTERVAL = 1000;  // Check every 1 second
 
         @Override
         public void run() {
@@ -147,49 +143,18 @@ public class DiningPhilosophers {
         private void checkForDeadlock() {
             synchronized (philosopherStates) {
                 boolean allHungry = true;
-                for (int i = 0; i < NUM_FORKS; i++) {
-                    // Check if all philosophers at the current table are hungry
-                    if (philosopherStates[i] != State.HUNGRY) {
+                for (State state : philosopherStates) {
+                    if (state != State.HUNGRY) {
                         allHungry = false;
                         break;
                     }
                 }
 
                 if (allHungry) {
-                    System.out.println("Deadlock detected at a table! Moving a philosopher to the sixth table.");
-                    movePhilosopherToSixthTable();
+                    deadlockDetected = true;
+                    System.out.println("Deadlock detected! All philosophers are waiting for forks.");
                 } else {
                     System.out.println("No deadlock detected.");
-                }
-            }
-        }
-
-        // Randomly select a philosopher to move to the sixth table to break deadlock
-        private void movePhilosopherToSixthTable() {
-            int philosopherToMove = random.nextInt(NUM_PHILOSOPHERS);  // Randomly select a philosopher to move
-            sixthTablePhilosopher = philosopherNames[philosopherToMove];  // Get the name of the philosopher
-
-            System.out.println("Philosopher " + sixthTablePhilosopher + " is moved to the sixth table.");
-            // Continue the simulation until deadlock occurs at the sixth table
-            checkDeadlockAtSixthTable();
-        }
-
-        // Check if deadlock occurs at the sixth table (with the moved philosopher)
-        private void checkDeadlockAtSixthTable() {
-            synchronized (philosopherStates) {
-                boolean deadlockAtSixthTable = true;
-
-                for (State state : philosopherStates) {
-                    // If any philosopher is not hungry, there's no deadlock yet
-                    if (state != State.HUNGRY) {
-                        deadlockAtSixthTable = false;
-                        break;
-                    }
-                }
-
-                if (deadlockAtSixthTable) {
-                    deadlockDetected = true;  // Set flag to terminate simulation
-                    System.out.println("Deadlock detected at the sixth table! Last philosopher: " + sixthTablePhilosopher);
                 }
             }
         }
